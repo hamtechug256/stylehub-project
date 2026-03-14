@@ -17,7 +17,7 @@ import {
   Ruler, Copy, Check, RefreshCw, AlertTriangle, Timer, Target,
   Link2, ArrowLeftRight, Building, Compass, Flame, Calendar,
   FileQuestion, Headphones, Ticket, Banknote, UserPlus, MousePointer,
-  Move, Ruler as RulerIcon, PieChart as PieChartIcon, LineChart
+  Move, Ruler as RulerIcon, PieChart as PieChartIcon, LineChart, Calculator
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -163,7 +163,7 @@ export default function Marketplace() {
   
   // New stores
   const { items: compareItems, addItem: addToCompare, removeItem: removeFromCompare, clearAll: clearCompare, hasItem: isInCompare, getItemCount: getCompareCount } = useCompareStore()
-  const { items: recentlyViewedItems, addItem: addToRecentlyViewed, clearAll: clearRecentlyViewed } = useRecentlyViewedStore()
+  const { items: recentlyViewedItems, addProduct: addToRecentlyViewed, clearHistory: clearRecentlyViewed } = useRecentlyViewedStore()
   const { addresses, addAddress, updateAddress, removeAddress, setDefault: setDefaultAddress, selectedAddress, setSelectedAddress } = useAddressStore()
   const { alerts: priceAlerts, addAlert: addPriceAlert, removeAlert: removePriceAlert, toggleActive: togglePriceAlertActive } = usePriceAlertStore()
   const { appliedGiftCard, applyGiftCard, getGiftCardBalance } = useGiftCardStore()
@@ -2137,25 +2137,13 @@ export default function Marketplace() {
                             <Separator className={darkMode ? 'bg-slate-700' : ''} />
                             <div className="grid grid-cols-2 gap-2 text-sm">
                               <div>
-                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Small</p>
-                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>${zone.baseRateSmall || 3}</p>
+                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Origin Routes</p>
+                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>{zone._count?.originRates || 0}</p>
                               </div>
                               <div>
-                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Medium</p>
-                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>${zone.baseRateMedium || 6}</p>
+                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Products Here</p>
+                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>{zone._count?.productShippings || 0}</p>
                               </div>
-                              <div>
-                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Large</p>
-                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>${zone.baseRateLarge || 12}</p>
-                              </div>
-                              <div>
-                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>X-Large</p>
-                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>${zone.baseRateXLarge || 25}</p>
-                              </div>
-                            </div>
-                            <div className={`flex items-center gap-1 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                              <Clock3 className="w-3 h-3" />
-                              <span>{zone.minDays || 1}-{zone.maxDays || 7} business days</span>
                             </div>
                           </CardContent>
                         </Card>
@@ -2178,6 +2166,74 @@ export default function Marketplace() {
                           </ul>
                         </div>
                       </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Shipping Calculator */}
+                  <Card className={darkMode ? 'bg-slate-800 border-slate-700' : ''}>
+                    <CardHeader>
+                      <CardTitle className={`flex items-center gap-2 ${darkMode ? 'text-white' : ''}`}>
+                        <Calculator className="w-5 h-5" />
+                        Shipping Calculator
+                      </CardTitle>
+                      <CardDescription>Test shipping costs between zones</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div>
+                          <Label className={darkMode ? 'text-white' : ''}>Origin Zone (Seller)</Label>
+                          <Select value={selectedZone?.id || ''} onValueChange={(v) => setSelectedZone(shippingZones.find(z => z.id === v) || null)}>
+                            <SelectTrigger className={darkMode ? 'bg-slate-700 border-slate-600' : ''}>
+                              <SelectValue placeholder="Select origin" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {shippingZones.map((z) => (
+                                <SelectItem key={z.id} value={z.id}>{z.name}, {z.country}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className={darkMode ? 'text-white' : ''}>Destination Zone (Buyer)</Label>
+                          <Select value={selectedDestZone} onValueChange={setSelectedDestZone}>
+                            <SelectTrigger className={darkMode ? 'bg-slate-700 border-slate-600' : ''}>
+                              <SelectValue placeholder="Select destination" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {shippingZones.map((z) => (
+                                <SelectItem key={z.id} value={z.id}>{z.name}, {z.country}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className={darkMode ? 'text-white' : ''}>Package Size</Label>
+                          <Select value={shippingForm.baseRateSmall?.toString() || 'medium'} onValueChange={(v) => {
+                            const sizes: Record<string, number> = { small: 3, medium: 6, large: 12, xlarge: 25 }
+                            setShippingForm(prev => ({ ...prev, baseRateSmall: sizes[v] || 6 }))
+                          }}>
+                            <SelectTrigger className={darkMode ? 'bg-slate-700 border-slate-600' : ''}>
+                              <SelectValue placeholder="Select size" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="small">📦 Small (Jewelry, Accessories)</SelectItem>
+                              <SelectItem value="medium">📦 Medium (Shoes, Small bags)</SelectItem>
+                              <SelectItem value="large">📦 Large (Clothing bundles)</SelectItem>
+                              <SelectItem value="xlarge">📦 X-Large (Furniture, Heavy)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      
+                      {selectedZone?.id && selectedDestZone && (
+                        <Button onClick={async () => {
+                          const res = await fetch(`/api/shipping?action=calculate&originZoneId=${selectedZone.id}&destZoneId=${selectedDestZone}&sizeCategory=medium`)
+                          const data = await res.json()
+                          toast.success(`Shipping: $${data.buyerPays} (${data.zoneName})`)
+                        }} className="w-full bg-gradient-to-r from-violet-600 to-purple-600">
+                          Calculate Shipping Cost
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -3811,6 +3867,185 @@ export default function Marketplace() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Shipping Zone Modal */}
+      <Dialog open={showShippingModal} onOpenChange={setShowShippingModal}>
+        <DialogContent className={`sm:max-w-lg ${darkMode ? 'bg-slate-800 border-slate-700' : ''}`}>
+          <DialogHeader>
+            <DialogTitle className={darkMode ? 'text-white' : ''}>
+              {selectedZone ? 'Edit Shipping Zone' : 'Add Shipping Zone'}
+            </DialogTitle>
+            <DialogDescription>
+              Configure shipping rates for this zone
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className={darkMode ? 'text-white' : ''}>Zone Name *</Label>
+                <Input
+                  value={shippingForm.name}
+                  onChange={(e) => setShippingForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g., Kampala"
+                  className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+                />
+              </div>
+              <div>
+                <Label className={darkMode ? 'text-white' : ''}>Country *</Label>
+                <Select value={shippingForm.country} onValueChange={(v) => setShippingForm(prev => ({ ...prev, country: v }))}>
+                  <SelectTrigger className={darkMode ? 'bg-slate-700 border-slate-600' : ''}>
+                    <SelectValue placeholder="Select country" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Uganda">🇺🇬 Uganda</SelectItem>
+                    <SelectItem value="Kenya">🇰🇪 Kenya</SelectItem>
+                    <SelectItem value="Tanzania">🇹🇿 Tanzania</SelectItem>
+                    <SelectItem value="Rwanda">🇷🇼 Rwanda</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className={darkMode ? 'text-white' : ''}>Country Code *</Label>
+                <Input
+                  value={shippingForm.countryCode}
+                  onChange={(e) => setShippingForm(prev => ({ ...prev, countryCode: e.target.value.toUpperCase() }))}
+                  placeholder="e.g., UG"
+                  maxLength={2}
+                  className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+                />
+              </div>
+              <div>
+                <Label className={darkMode ? 'text-white' : ''}>Region</Label>
+                <Input
+                  value={shippingForm.region}
+                  onChange={(e) => setShippingForm(prev => ({ ...prev, region: e.target.value }))}
+                  placeholder="e.g., Central"
+                  className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+                />
+              </div>
+            </div>
+            
+            <div>
+              <Label className={darkMode ? 'text-white' : ''}>Cities (comma separated)</Label>
+              <Textarea
+                value={shippingForm.cities}
+                onChange={(e) => setShippingForm(prev => ({ ...prev, cities: e.target.value }))}
+                placeholder="Kampala, Wakiso, Mukono..."
+                rows={2}
+                className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+              />
+            </div>
+            
+            <Separator className={darkMode ? 'bg-slate-700' : ''} />
+            
+            <div>
+              <Label className={darkMode ? 'text-white' : ''}>Base Rates by Size (USD)</Label>
+              <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'} mb-3`}>
+                These are the base rates for shipping from this zone
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Small</Label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    value={shippingForm.baseRateSmall}
+                    onChange={(e) => setShippingForm(prev => ({ ...prev, baseRateSmall: parseFloat(e.target.value) || 0 }))}
+                    className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+                  />
+                </div>
+                <div>
+                  <Label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Medium</Label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    value={shippingForm.baseRateMedium}
+                    onChange={(e) => setShippingForm(prev => ({ ...prev, baseRateMedium: parseFloat(e.target.value) || 0 }))}
+                    className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+                  />
+                </div>
+                <div>
+                  <Label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Large</Label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    value={shippingForm.baseRateLarge}
+                    onChange={(e) => setShippingForm(prev => ({ ...prev, baseRateLarge: parseFloat(e.target.value) || 0 }))}
+                    className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+                  />
+                </div>
+                <div>
+                  <Label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>X-Large</Label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    value={shippingForm.baseRateXLarge}
+                    onChange={(e) => setShippingForm(prev => ({ ...prev, baseRateXLarge: parseFloat(e.target.value) || 0 }))}
+                    className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className={darkMode ? 'text-white' : ''}>Min Days</Label>
+                <Input
+                  type="number"
+                  value={shippingForm.minDays}
+                  onChange={(e) => setShippingForm(prev => ({ ...prev, minDays: parseInt(e.target.value) || 1 }))}
+                  className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+                />
+              </div>
+              <div>
+                <Label className={darkMode ? 'text-white' : ''}>Max Days</Label>
+                <Input
+                  type="number"
+                  value={shippingForm.maxDays}
+                  onChange={(e) => setShippingForm(prev => ({ ...prev, maxDays: parseInt(e.target.value) || 7 }))}
+                  className={darkMode ? 'bg-slate-700 border-slate-600' : ''}
+                />
+              </div>
+            </div>
+            
+            <div className={`p-3 rounded-lg ${darkMode ? 'bg-slate-700' : 'bg-purple-50'}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className={darkMode ? 'text-white' : ''}>Platform Markup</Label>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Added to shipping cost (hidden from buyers)
+                  </p>
+                </div>
+                <span className={`font-bold text-lg ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>
+                  {(shippingForm.platformMarkup * 100).toFixed(0)}%
+                </span>
+              </div>
+              <Input
+                type="range"
+                min="0"
+                max="0.5"
+                step="0.05"
+                value={shippingForm.platformMarkup}
+                onChange={(e) => setShippingForm(prev => ({ ...prev, platformMarkup: parseFloat(e.target.value) }))}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button variant="outline" className="flex-1" onClick={() => setShowShippingModal(false)}>
+              Cancel
+            </Button>
+            <Button className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600" onClick={saveShippingZone}>
+              {selectedZone ? 'Update Zone' : 'Create Zone'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

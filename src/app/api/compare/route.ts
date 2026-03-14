@@ -11,22 +11,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
-    // Get user's comparison list
-    const comparison = await db.productComparison.findFirst({
-      where: { userId }
-    })
-
-    if (!comparison) {
-      return NextResponse.json({ productIds: [], products: [] })
-    }
-
-    const productIds: string[] = JSON.parse(comparison.productIds || '[]')
-
-    // Fetch product details
-    const products = await Promise.all(
-      productIds.map(async (id) => {
-        const product = await db.product.findUnique({
-          where: { id },
+    // Get user's comparison list using the Comparison model
+    const comparisons = await db.comparison.findMany({
+      where: { userId },
+      include: {
+        product: {
           select: {
             id: true,
             name: true,
@@ -37,24 +26,22 @@ export async function GET(request: NextRequest) {
             subCategory: true,
             brand: true,
             description: true,
-            specifications: true,
             rating: true,
             reviewCount: true,
             soldCount: true,
             stock: true,
             condition: true
           }
-        })
-        return product
-      })
-    )
+        }
+      }
+    })
 
-    // Filter out null products
-    const validProducts = products.filter((p): p is NonNullable<typeof p> => p !== null)
+    const productIds = comparisons.map(c => c.productId)
+    const products = comparisons.map(c => c.product).filter(Boolean)
 
     return NextResponse.json({
       productIds,
-      products: validProducts
+      products
     })
   } catch (error) {
     console.error('Get comparison error:', error)
@@ -81,53 +68,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 })
     }
 
-    // Get or create comparison list
-    let comparison = await db.productComparison.findFirst({
+    // Check current count
+    const currentCount = await db.comparison.count({
       where: { userId }
     })
 
-    const maxProducts = 4 // Maximum products to compare
+    const maxProducts = 4
 
-    if (!comparison) {
-      // Create new comparison list
-      comparison = await db.productComparison.create({
-        data: {
-          userId,
-          productIds: JSON.stringify([productId])
-        }
-      })
-    } else {
-      // Update existing list
-      let productIds: string[] = JSON.parse(comparison.productIds || '[]')
-
-      // Check if product already in list
-      if (productIds.includes(productId)) {
-        return NextResponse.json({ 
-          error: 'Product already in comparison list',
-          productIds 
-        }, { status: 400 })
-      }
-
-      // Check if list is full
-      if (productIds.length >= maxProducts) {
-        return NextResponse.json({ 
-          error: `Maximum ${maxProducts} products can be compared`,
-          productIds 
-        }, { status: 400 })
-      }
-
-      // Add product
-      productIds.push(productId)
-
-      comparison = await db.productComparison.update({
-        where: { id: comparison.id },
-        data: { productIds: JSON.stringify(productIds) }
-      })
+    if (currentCount >= maxProducts) {
+      return NextResponse.json({ 
+        error: `Maximum ${maxProducts} products can be compared`
+      }, { status: 400 })
     }
+
+    // Check if already exists
+    const existing = await db.comparison.findUnique({
+      where: {
+        userId_productId: { userId, productId }
+      }
+    })
+
+    if (existing) {
+      return NextResponse.json({ 
+        error: 'Product already in comparison list'
+      }, { status: 400 })
+    }
+
+    // Add to comparison
+    await db.comparison.create({
+      data: { userId, productId }
+    })
+
+    const comparisons = await db.comparison.findMany({
+      where: { userId },
+      select: { productId: true }
+    })
 
     return NextResponse.json({
       success: true,
-      productIds: JSON.parse(comparison.productIds || '[]')
+      productIds: comparisons.map(c => c.productId)
     }, { status: 201 })
   } catch (error) {
     console.error('Add to comparison error:', error)
@@ -149,7 +128,7 @@ export async function DELETE(request: NextRequest) {
 
     // Clear all products
     if (clearAll === 'true') {
-      await db.productComparison.deleteMany({
+      await db.comparison.deleteMany({
         where: { userId }
       })
       return NextResponse.json({ success: true, message: 'Comparison list cleared' })
@@ -160,32 +139,20 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Product ID is required' }, { status: 400 })
     }
 
-    const comparison = await db.productComparison.findFirst({
-      where: { userId }
+    await db.comparison.delete({
+      where: {
+        userId_productId: { userId, productId }
+      }
     })
 
-    if (!comparison) {
-      return NextResponse.json({ error: 'No comparison list found' }, { status: 404 })
-    }
-
-    let productIds: string[] = JSON.parse(comparison.productIds || '[]')
-    productIds = productIds.filter(id => id !== productId)
-
-    if (productIds.length === 0) {
-      // Delete the comparison list if empty
-      await db.productComparison.delete({
-        where: { id: comparison.id }
-      })
-    } else {
-      await db.productComparison.update({
-        where: { id: comparison.id },
-        data: { productIds: JSON.stringify(productIds) }
-      })
-    }
+    const comparisons = await db.comparison.findMany({
+      where: { userId },
+      select: { productId: true }
+    })
 
     return NextResponse.json({
       success: true,
-      productIds
+      productIds: comparisons.map(c => c.productId)
     })
   } catch (error) {
     console.error('Remove from comparison error:', error)

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET: Fetch return requests (filter by userId, sellerId, status)
+// GET: Fetch return requests (filter by userId, status)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
-    const sellerId = searchParams.get('sellerId')
     const status = searchParams.get('status')
     const returnId = searchParams.get('id')
 
@@ -21,7 +20,6 @@ export async function GET(request: NextRequest) {
     // Build filter conditions
     const where: Record<string, unknown> = {}
     if (userId) where.userId = userId
-    if (sellerId) where.sellerId = sellerId
     if (status) where.status = status
 
     const returnRequests = await db.returnRequest.findMany({
@@ -40,33 +38,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { orderId, orderItemId, userId, sellerId, reason, description, images, refundAmount, refundMethod } = body
+    const { orderId, orderItemId, userId, reason, description, images, refundAmount } = body
 
     // Validate required fields
-    if (!orderId || !orderItemId || !userId || !sellerId || !reason || !refundAmount) {
+    if (!orderId || !userId || !reason) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
-
-    // Check if return already exists for this order item
-    const existingReturn = await db.returnRequest.findFirst({
-      where: { orderItemId }
-    })
-
-    if (existingReturn) {
-      return NextResponse.json({ error: 'Return request already exists for this item' }, { status: 400 })
     }
 
     const returnRequest = await db.returnRequest.create({
       data: {
         orderId,
-        orderItemId,
+        orderItemId: orderItemId || null,
         userId,
-        sellerId,
         reason,
         description: description || null,
         images: images ? JSON.stringify(images) : null,
-        refundAmount: parseFloat(refundAmount),
-        refundMethod: refundMethod || 'original',
+        refundAmount: refundAmount ? parseFloat(refundAmount) : null,
         status: 'pending'
       }
     })
@@ -99,13 +86,9 @@ export async function PUT(request: NextRequest) {
     if (adminNotes) updateData.adminNotes = adminNotes
     if (refundAmount) updateData.refundAmount = parseFloat(refundAmount)
 
-    // Set processed/completed timestamps
-    if (status === 'approved' || status === 'rejected') {
+    // Set processed timestamp
+    if (status === 'approved' || status === 'rejected' || status === 'completed') {
       updateData.processedAt = new Date()
-    }
-    if (status === 'completed') {
-      updateData.completedAt = new Date()
-      updateData.processedAt = updateData.processedAt || new Date()
     }
 
     const returnRequest = await db.returnRequest.update({
@@ -113,8 +96,8 @@ export async function PUT(request: NextRequest) {
       data: updateData
     })
 
-    // If completed, handle refund (add to user's balance if wallet refund)
-    if (status === 'completed' && returnRequest.refundMethod === 'wallet') {
+    // If completed, handle refund (add to user's balance)
+    if (status === 'completed' && returnRequest.refundAmount && returnRequest.userId) {
       await db.user.update({
         where: { id: returnRequest.userId },
         data: { balance: { increment: returnRequest.refundAmount } }

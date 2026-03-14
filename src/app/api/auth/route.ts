@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-import { hash, compare } from 'crypto'
-
-const prisma = new PrismaClient()
+import { db } from '@/lib/db'
 
 // Simple hash function for passwords
 function simpleHash(str: string): string {
@@ -27,14 +24,14 @@ export async function POST(request: NextRequest) {
 
     if (action === 'register') {
       // Check if user exists
-      const existingUser = await prisma.user.findUnique({ where: { email } })
+      const existingUser = await db.user.findUnique({ where: { email } })
       if (existingUser) {
         return NextResponse.json({ error: 'Email already registered' }, { status: 400 })
       }
 
       // Create user
       const hashedPassword = simpleHash(password)
-      const user = await prisma.user.create({
+      const user = await db.user.create({
         data: {
           email,
           password: hashedPassword,
@@ -55,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'login') {
       // Find user
-      const user = await prisma.user.findUnique({ where: { email } })
+      const user = await db.user.findUnique({ where: { email } })
       if (!user) {
         return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
       }
@@ -75,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'update') {
       const { userId, updates } = body
-      const user = await prisma.user.update({
+      const user = await db.user.update({
         where: { id: userId },
         data: updates
       })
@@ -95,7 +92,7 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId')
     
     if (userId) {
-      const user = await prisma.user.findUnique({ 
+      const user = await db.user.findUnique({ 
         where: { id: userId },
         include: {
           products: true,
@@ -109,7 +106,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all users (admin)
-    const users = await prisma.user.findMany({
+    const users = await db.user.findMany({
       select: {
         id: true,
         email: true,

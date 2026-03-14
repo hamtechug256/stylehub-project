@@ -656,6 +656,18 @@ export const useRecentlyViewedStore = create<RecentlyViewedState>()(
   )
 )
 
+// Aliases for consistency
+export const useRecentlyViewedStoreAlias = () => {
+  const store = useRecentlyViewedStore()
+  return {
+    items: store.items,
+    addItem: store.addProduct,
+    clearAll: store.clearHistory,
+    getItems: store.getItems,
+    maxItems: store.maxItems
+  }
+}
+
 // ==================== UI STORE ====================
 
 interface UIState {

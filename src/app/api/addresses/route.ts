@@ -7,7 +7,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
     const addressId = searchParams.get('id')
-    const addressType = searchParams.get('type')
 
     // Get single address
     if (addressId) {
@@ -21,12 +20,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
-    // Build filter
-    const where: Record<string, unknown> = { userId }
-    if (addressType) where.addressType = addressType
-
     const addresses = await db.address.findMany({
-      where,
+      where: { userId },
       orderBy: [
         { isDefault: 'desc' },
         { createdAt: 'desc' }
@@ -44,17 +39,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userId, name, phone, address, city, state, country, postalCode, isDefault, addressType } = body
+    const { userId, label, fullName, phone, addressLine1, addressLine2, city, state, country, zipCode, isDefault } = body
 
     // Validate required fields
-    if (!userId || !name || !phone || !address || !city || !country) {
+    if (!userId || !fullName || !phone || !addressLine1 || !city || !country || !zipCode) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     // If this is set as default, remove default from other addresses
     if (isDefault) {
       await db.address.updateMany({
-        where: { userId, addressType: addressType || 'shipping' },
+        where: { userId },
         data: { isDefault: false }
       })
     }
@@ -62,15 +57,16 @@ export async function POST(request: NextRequest) {
     const newAddress = await db.address.create({
       data: {
         userId,
-        name,
+        label: label || 'Home',
+        fullName,
         phone,
-        address,
+        addressLine1,
+        addressLine2: addressLine2 || null,
         city,
         state: state || null,
         country,
-        postalCode: postalCode || null,
-        isDefault: isDefault || false,
-        addressType: addressType || 'shipping'
+        zipCode,
+        isDefault: isDefault || false
       }
     })
 
@@ -85,7 +81,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { id, userId, name, phone, address, city, state, country, postalCode, isDefault, addressType } = body
+    const { id, userId, label, fullName, phone, addressLine1, addressLine2, city, state, country, zipCode, isDefault } = body
 
     if (!id || !userId) {
       return NextResponse.json({ error: 'Address ID and User ID are required' }, { status: 400 })
@@ -103,29 +99,25 @@ export async function PUT(request: NextRequest) {
     // If setting as default, remove default from other addresses
     if (isDefault) {
       await db.address.updateMany({
-        where: { 
-          userId, 
-          addressType: addressType || existingAddress.addressType,
-          id: { not: id }
-        },
+        where: { userId, id: { not: id } },
         data: { isDefault: false }
       })
     }
 
-    const updateData: Record<string, unknown> = {}
-    if (name !== undefined) updateData.name = name
-    if (phone !== undefined) updateData.phone = phone
-    if (address !== undefined) updateData.address = address
-    if (city !== undefined) updateData.city = city
-    if (state !== undefined) updateData.state = state
-    if (country !== undefined) updateData.country = country
-    if (postalCode !== undefined) updateData.postalCode = postalCode
-    if (isDefault !== undefined) updateData.isDefault = isDefault
-    if (addressType !== undefined) updateData.addressType = addressType
-
     const updatedAddress = await db.address.update({
       where: { id },
-      data: updateData
+      data: {
+        label,
+        fullName,
+        phone,
+        addressLine1,
+        addressLine2,
+        city,
+        state,
+        country,
+        zipCode,
+        isDefault
+      }
     })
 
     return NextResponse.json(updatedAddress)

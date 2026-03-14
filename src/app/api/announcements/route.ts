@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     const announcement = await db.announcement.create({
       data: {
         title,
-        message,
+        content: message,
         type: type || 'info',
         link: link || null,
         isActive: isActive !== undefined ? isActive : true,
@@ -108,7 +108,7 @@ export async function PUT(request: NextRequest) {
 
     const updateData: Record<string, unknown> = {}
     if (title !== undefined) updateData.title = title
-    if (message !== undefined) updateData.message = message
+    if (message !== undefined) updateData.content = message
     if (type !== undefined) updateData.type = type
     if (link !== undefined) updateData.link = link
     if (isActive !== undefined) updateData.isActive = isActive

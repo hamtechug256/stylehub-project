@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
     const productId = searchParams.get('productId')
     const questionId = searchParams.get('id')
     const userId = searchParams.get('userId')
-    const answered = searchParams.get('answered')
 
     // Get single question
     if (questionId) {
@@ -22,14 +21,11 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = {}
     if (productId) where.productId = productId
     if (userId) where.userId = userId
-    if (answered !== null) {
-      where.isAnswered = answered === 'true'
-    }
 
     const questions = await db.productQuestion.findMany({
       where,
       orderBy: [
-        { isAnswered: 'asc' }, // Unanswered first
+        { answeredAt: 'desc' }, // Answered questions first
         { createdAt: 'desc' }
       ],
       take: 50
@@ -96,7 +92,6 @@ export async function POST(request: NextRequest) {
         productId,
         userId,
         question,
-        isAnswered: false,
         isHelpful: 0
       }
     })
@@ -112,7 +107,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { id, answer, answeredBy, action } = body
+    const { id, answer, action } = body
 
     if (!id) {
       return NextResponse.json({ error: 'Question ID is required' }, { status: 400 })
@@ -127,24 +122,11 @@ export async function PUT(request: NextRequest) {
     }
 
     // Answer question
-    if (action === 'answer' && answer && answeredBy) {
-      // Verify the answerer is the seller of the product
-      const product = await db.product.findUnique({
-        where: { id: question.productId }
-      })
-
-      if (!product || product.sellerId !== answeredBy) {
-        return NextResponse.json({ 
-          error: 'Only the product seller can answer questions' 
-        }, { status: 403 })
-      }
-
+    if (action === 'answer' && answer) {
       const updatedQuestion = await db.productQuestion.update({
         where: { id },
         data: {
           answer,
-          answeredBy,
-          isAnswered: true,
           answeredAt: new Date()
         }
       })

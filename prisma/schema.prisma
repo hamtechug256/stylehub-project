@@ -778,3 +778,66 @@ model ProductShipping {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+// ==================== ANNOUNCEMENTS ====================
+
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String
+  content     String
+  type        String    @default("info")  // info, warning, promotion, update
+  image       String?
+  link        String?
+  targetType  String    @default("all")   // all, buyers, sellers
+  isActive    Boolean   @default(true)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ==================== PRODUCT QUESTIONS ====================
+
+model ProductQuestion {
+  id          String    @id @default(cuid())
+  productId   String
+  userId      String
+  question    String
+  answer      String?
+  answeredAt  DateTime?
+  isHelpful   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ==================== RETURN REQUESTS ====================
+
+model ReturnRequest {
+  id            String    @id @default(cuid())
+  orderId       String
+  orderItemId   String?
+  userId        String
+  reason        String
+  description   String?
+  images        String?
+  status        String    @default("pending")  // pending, approved, rejected, completed
+  refundAmount  Float?
+  adminNotes    String?
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ==================== REFERRAL TRACKING ====================
+
+model ReferralTracking {
+  id            String    @id @default(cuid())
+  referrerId    String
+  referredId    String
+  referralCode  String
+  status        String    @default("pending")  // pending, completed, rewarded
+  rewardAmount  Float     @default(0)
+  isRewarded    Boolean   @default(false)
+  rewardedAt    DateTime?
+  createdAt     DateTime  @default(now())
+}
