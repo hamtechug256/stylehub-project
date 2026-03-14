@@ -33,6 +33,7 @@ import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Switch } from '@/components/ui/switch'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 import { 
   useAuthStore, useCartStore, useUIStore, useWishlistStore,
@@ -75,6 +76,17 @@ const subCategories: Record<string, {id: string, name: string}[]> = {
     { id: 'belts', name: 'Belts' },
     { id: 'hats', name: 'Hats' },
   ]
+}
+
+// Country gradient colors for shipping zones
+const getCountryGradient = (countryCode: string): string => {
+  const gradients: Record<string, string> = {
+    'UG': 'from-yellow-500 to-red-500',   // Uganda
+    'KE': 'from-green-500 to-white',      // Kenya  
+    'TZ': 'from-blue-500 to-green-500',   // Tanzania
+    'RW': 'from-blue-400 to-yellow-400',  // Rwanda
+  }
+  return gradients[countryCode] || 'from-purple-500 to-pink-500'
 }
 
 const conditionColors: Record<string, string> = {
@@ -120,6 +132,19 @@ export default function Marketplace() {
   const [blogs, setBlogs] = useState<Blog[]>([])
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
+
+  // Shipping states
+  const [shippingZones, setShippingZones] = useState<any[]>([])
+  const [shippingRates, setShippingRates] = useState<any[]>([])
+  const [selectedZone, setSelectedZone] = useState<any>(null)
+  const [showShippingModal, setShowShippingModal] = useState(false)
+  const [showRateModal, setShowRateModal] = useState(false)
+  const [shippingModalType, setShippingModalType] = useState<'zone' | 'rate'>('zone')
+  const [shippingForm, setShippingForm] = useState({
+    name: '', country: '', countryCode: '', region: '', cities: '',
+    baseRateSmall: 3, baseRateMedium: 6, baseRateLarge: 12, baseRateXLarge: 25,
+    minDays: 1, maxDays: 7, platformMarkup: 0.25
+  })
 
   // Stores
   const { user, isAuthenticated, login, logout, updateUser } = useAuthStore()
@@ -286,11 +311,82 @@ export default function Marketplace() {
     }
   }, [isAuthenticated, user])
 
+  // Fetch shipping zones and rates
+  const fetchShippingData = useCallback(async () => {
+    try {
+      const zonesRes = await fetch('/api/shipping')
+      const zonesData = await zonesRes.json()
+      setShippingZones(ensureArray(zonesData))
+    } catch (error) {
+      console.error('Failed to fetch shipping data:', error)
+    }
+  }, [])
+
+  // Seed shipping zones (admin only)
+  const seedShippingZones = async () => {
+    try {
+      const res = await fetch('/api/shipping/seed', { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(`Created ${data.zonesCreated} zones and ${data.ratesCreated} rates`)
+        fetchShippingData()
+      } else {
+        toast.info(data.message || 'Zones already exist')
+      }
+    } catch (error) {
+      toast.error('Failed to seed shipping zones')
+    }
+  }
+
+  // Create/Update shipping zone
+  const saveShippingZone = async () => {
+    try {
+      const method = selectedZone?.id ? 'PUT' : 'POST'
+      const body = {
+        type: 'zone',
+        ...(selectedZone?.id && { id: selectedZone.id }),
+        ...shippingForm
+      }
+      const res = await fetch('/api/shipping', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (res.ok) {
+        toast.success(selectedZone?.id ? 'Zone updated' : 'Zone created')
+        setShowShippingModal(false)
+        fetchShippingData()
+        setShippingForm({
+          name: '', country: '', countryCode: '', region: '', cities: '',
+          baseRateSmall: 3, baseRateMedium: 6, baseRateLarge: 12, baseRateXLarge: 25,
+          minDays: 1, maxDays: 7, platformMarkup: 0.25
+        })
+      }
+    } catch (error) {
+      toast.error('Failed to save zone')
+    }
+  }
+
+  // Delete shipping zone
+  const deleteShippingZone = async (id: string) => {
+    if (!confirm('Delete this shipping zone?')) return
+    try {
+      await fetch(`/api/shipping?type=zone&id=${id}`, { method: 'DELETE' })
+      toast.success('Zone deleted')
+      fetchShippingData()
+    } catch (error) {
+      toast.error('Failed to delete zone')
+    }
+  }
+
   // Effects
   useEffect(() => { fetchProducts() }, [fetchProducts])
   useEffect(() => { fetchBlogs() }, [fetchBlogs])
   useEffect(() => { fetchCoupons() }, [fetchCoupons])
   useEffect(() => { fetchUserData() }, [fetchUserData])
+  useEffect(() => { 
+    if (user?.role === 'ADMIN') fetchShippingData() 
+  }, [fetchShippingData, user?.role])
 
   // Seed data on first load
   useEffect(() => {
@@ -1730,6 +1826,7 @@ export default function Marketplace() {
               <Tabs defaultValue="users">
                 <TabsList className={darkMode ? 'bg-slate-800' : ''}>
                   <TabsTrigger value="users">Users</TabsTrigger>
+                  <TabsTrigger value="shipping">Shipping</TabsTrigger>
                   <TabsTrigger value="coupons">Coupons</TabsTrigger>
                   <TabsTrigger value="settings">Settings</TabsTrigger>
                 </TabsList>
@@ -1765,6 +1862,183 @@ export default function Marketplace() {
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="shipping" className="mt-6 space-y-6">
+                  {/* Shipping Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : ''}`}>Shipping Zones</h3>
+                      <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        Manage delivery zones and rates for East Africa
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {shippingZones.length === 0 && (
+                        <Button onClick={seedShippingZones} variant="outline" className="gap-2">
+                          <Zap className="w-4 h-4" /> Seed Default Zones
+                        </Button>
+                      )}
+                      <Button onClick={() => {
+                        setSelectedZone(null)
+                        setShippingForm({
+                          name: '', country: '', countryCode: '', region: '', cities: '',
+                          baseRateSmall: 3, baseRateMedium: 6, baseRateLarge: 12, baseRateXLarge: 25,
+                          minDays: 1, maxDays: 7, platformMarkup: 0.25
+                        })
+                        setShowShippingModal(true)
+                      }} className="gap-2">
+                        <Plus className="w-4 h-4" /> Add Zone
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Zone Type Legend */}
+                  <div className={`grid grid-cols-4 gap-3 p-4 rounded-xl ${darkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
+                    <div className="text-center">
+                      <Badge className="bg-green-100 text-green-700 w-full justify-center">Z1 - Local</Badge>
+                      <p className="text-xs mt-1 text-slate-500">Same city delivery</p>
+                    </div>
+                    <div className="text-center">
+                      <Badge className="bg-blue-100 text-blue-700 w-full justify-center">Z2 - National</Badge>
+                      <p className="text-xs mt-1 text-slate-500">Within same country</p>
+                    </div>
+                    <div className="text-center">
+                      <Badge className="bg-yellow-100 text-yellow-700 w-full justify-center">Z3 - Regional</Badge>
+                      <p className="text-xs mt-1 text-slate-500">Neighboring countries</p>
+                    </div>
+                    <div className="text-center">
+                      <Badge className="bg-red-100 text-red-700 w-full justify-center">Z4 - Cross-border</Badge>
+                      <p className="text-xs mt-1 text-slate-500">Distant countries</p>
+                    </div>
+                  </div>
+
+                  {/* Shipping Zones Grid */}
+                  {shippingZones.length === 0 ? (
+                    <Card className={`text-center py-12 ${darkMode ? 'bg-slate-800 border-slate-700' : ''}`}>
+                      <CardContent>
+                        <Truck className={`w-12 h-12 ${darkMode ? 'text-slate-600' : 'text-slate-300'} mx-auto mb-4`} />
+                        <h4 className={`font-medium ${darkMode ? 'text-white' : 'text-slate-900'} mb-2`}>No shipping zones configured</h4>
+                        <p className={`${darkMode ? 'text-slate-400' : 'text-slate-500'} mb-4`}>
+                          Click "Seed Default Zones" to automatically create zones for Uganda, Kenya, Tanzania, and Rwanda
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {shippingZones.map((zone) => (
+                        <Card key={zone.id} className={`${darkMode ? 'bg-slate-800 border-slate-700' : ''} hover:shadow-lg transition-shadow`}>
+                          <CardHeader className="pb-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getCountryGradient(zone.countryCode)} flex items-center justify-center text-white font-bold text-sm`}>
+                                  {zone.countryCode}
+                                </div>
+                                <div>
+                                  <CardTitle className={`text-lg ${darkMode ? 'text-white' : ''}`}>{zone.name}</CardTitle>
+                                  <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{zone.country}</p>
+                                </div>
+                              </div>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => {
+                                    setSelectedZone(zone)
+                                    setShippingForm({
+                                      name: zone.name,
+                                      country: zone.country,
+                                      countryCode: zone.countryCode,
+                                      region: zone.region || '',
+                                      cities: zone.cities ? JSON.parse(zone.cities).join(', ') : '',
+                                      baseRateSmall: zone.baseRateSmall || 3,
+                                      baseRateMedium: zone.baseRateMedium || 6,
+                                      baseRateLarge: zone.baseRateLarge || 12,
+                                      baseRateXLarge: zone.baseRateXLarge || 25,
+                                      minDays: zone.minDays || 1,
+                                      maxDays: zone.maxDays || 7,
+                                      platformMarkup: zone.platformMarkup || 0.25
+                                    })
+                                    setShowShippingModal(true)
+                                  }}>
+                                    <Edit className="w-4 h-4 mr-2" /> Edit Zone
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-red-500" onClick={() => deleteShippingZone(zone.id)}>
+                                    <Trash2 className="w-4 h-4 mr-2" /> Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {zone.region && (
+                              <div className="flex items-center gap-2">
+                                <MapPin className={`w-4 h-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                                <span className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{zone.region} Region</span>
+                              </div>
+                            )}
+                            {zone.cities && (
+                              <div>
+                                <p className={`text-xs font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'} mb-1`}>Cities covered:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {JSON.parse(zone.cities).slice(0, 4).map((city: string, i: number) => (
+                                    <Badge key={i} variant="outline" className="text-xs">{city}</Badge>
+                                  ))}
+                                  {JSON.parse(zone.cities).length > 4 && (
+                                    <Badge variant="outline" className="text-xs">+{JSON.parse(zone.cities).length - 4} more</Badge>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            <Separator className={darkMode ? 'bg-slate-700' : ''} />
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Small</p>
+                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>${zone.baseRateSmall || 3}</p>
+                              </div>
+                              <div>
+                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Medium</p>
+                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>${zone.baseRateMedium || 6}</p>
+                              </div>
+                              <div>
+                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Large</p>
+                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>${zone.baseRateLarge || 12}</p>
+                              </div>
+                              <div>
+                                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>X-Large</p>
+                                <p className={`font-semibold ${darkMode ? 'text-white' : ''}`}>${zone.baseRateXLarge || 25}</p>
+                              </div>
+                            </div>
+                            <div className={`flex items-center gap-1 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                              <Clock3 className="w-3 h-3" />
+                              <span>{zone.minDays || 1}-{zone.maxDays || 7} business days</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Shipping Info Card */}
+                  <Card className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-amber-50 border-amber-200'}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <Info className={`w-5 h-5 mt-0.5 ${darkMode ? 'text-amber-400' : 'text-amber-600'}`} />
+                        <div>
+                          <h4 className={`font-medium ${darkMode ? 'text-white' : 'text-amber-800'}`}>How Shipping Works</h4>
+                          <ul className={`text-sm mt-2 space-y-1 ${darkMode ? 'text-slate-300' : 'text-amber-700'}`}>
+                            <li>• <strong>Buyer pays:</strong> Base rate + Size surcharge + Platform markup (hidden)</li>
+                            <li>• <strong>Seller receives:</strong> Base rate + Size surcharge (actual shipping cost)</li>
+                            <li>• <strong>Platform keeps:</strong> The 25% markup on shipping for profit</li>
+                            <li>• <strong>Nobody loses money</strong> - Shipping covers actual costs + platform profit</li>
+                          </ul>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
