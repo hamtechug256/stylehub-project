@@ -177,7 +177,8 @@ export default function Marketplace() {
     name: '', description: '', price: '', comparePrice: '',
     category: 'clothes', subCategory: '', brand: '',
     condition: 'new', stock: '1', images: [] as string[],
-    tags: '', specifications: ''
+    tags: '', specifications: '',
+    sizeCategory: 'medium', weight: '', length: '', width: '', height: ''
   })
   const [checkoutForm, setCheckoutForm] = useState({
     shippingAddress: '', buyerPhone: '', notes: '', couponCode: ''
@@ -457,7 +458,12 @@ export default function Marketplace() {
         body: JSON.stringify({ ...productForm, sellerId: user.id })
       })
       toast.success('Product listed successfully!')
-      setProductForm({ name: '', description: '', price: '', comparePrice: '', category: 'clothes', subCategory: '', brand: '', condition: 'new', stock: '1', images: [], tags: '', specifications: '' })
+      setProductForm({ 
+        name: '', description: '', price: '', comparePrice: '', 
+        category: 'clothes', subCategory: '', brand: '', 
+        condition: 'new', stock: '1', images: [], tags: '', specifications: '',
+        sizeCategory: 'medium', weight: '', length: '', width: '', height: ''
+      })
       fetchUserData()
     } catch (error) {
       toast.error('Failed to add product')
@@ -1654,6 +1660,97 @@ export default function Marketplace() {
                                 <SelectItem value="fair">Fair</SelectItem>
                               </SelectContent>
                             </Select>
+                          </div>
+                        </div>
+                        
+                        {/* Shipping Size Category */}
+                        <div className={`p-4 rounded-xl ${darkMode ? 'bg-slate-700' : 'bg-purple-50'} border border-purple-200`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <Truck className={`w-5 h-5 ${darkMode ? 'text-purple-400' : 'text-purple-600'}`} />
+                            <Label className={`text-base font-semibold ${darkMode ? 'text-white' : 'text-purple-900'}`}>Shipping Size Category</Label>
+                          </div>
+                          <p className={`text-sm mb-3 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                            Select the package size for accurate shipping cost calculation. This affects the shipping price buyers pay.
+                          </p>
+                          <div className="grid grid-cols-4 gap-2">
+                            {[
+                              { id: 'small', label: 'Small', icon: '📦', desc: 'Jewelry, accessories', price: '$3-5' },
+                              { id: 'medium', label: 'Medium', icon: '👞', desc: 'Shoes, bags', price: '$6-10' },
+                              { id: 'large', label: 'Large', icon: '🧥', desc: 'Clothing bundles', price: '$12-20' },
+                              { id: 'xlarge', label: 'X-Large', icon: '🪑', desc: 'Heavy/bulky items', price: '$25-50' },
+                            ].map((size) => (
+                              <button
+                                key={size.id}
+                                type="button"
+                                onClick={() => setProductForm(prev => ({ ...prev, sizeCategory: size.id }))}
+                                className={`p-3 rounded-xl border-2 transition-all text-center ${
+                                  productForm.sizeCategory === size.id
+                                    ? 'border-purple-500 bg-purple-100 dark:bg-purple-900/50'
+                                    : darkMode 
+                                      ? 'border-slate-600 hover:border-slate-500 bg-slate-800'
+                                      : 'border-slate-200 hover:border-purple-300 bg-white'
+                                }`}
+                              >
+                                <span className="text-2xl">{size.icon}</span>
+                                <p className={`font-medium text-sm mt-1 ${darkMode ? 'text-white' : ''}`}>{size.label}</p>
+                                <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{size.desc}</p>
+                                <p className={`text-xs font-semibold mt-1 ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>{size.price}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Optional Package Dimensions */}
+                        <div className={`p-4 rounded-xl ${darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <Ruler className={`w-4 h-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                              <Label className={`text-sm ${darkMode ? 'text-white' : ''}`}>Package Dimensions (optional)</Label>
+                            </div>
+                            <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>For more accurate shipping quotes</span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-3">
+                            <div>
+                              <Label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Weight (kg)</Label>
+                              <Input
+                                type="number"
+                                step="0.1"
+                                value={productForm.weight}
+                                onChange={(e) => setProductForm(prev => ({ ...prev, weight: e.target.value }))}
+                                placeholder="0.5"
+                                className={darkMode ? 'bg-slate-600 border-slate-500 h-9' : 'h-9'}
+                              />
+                            </div>
+                            <div>
+                              <Label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Length (cm)</Label>
+                              <Input
+                                type="number"
+                                value={productForm.length}
+                                onChange={(e) => setProductForm(prev => ({ ...prev, length: e.target.value }))}
+                                placeholder="20"
+                                className={darkMode ? 'bg-slate-600 border-slate-500 h-9' : 'h-9'}
+                              />
+                            </div>
+                            <div>
+                              <Label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Width (cm)</Label>
+                              <Input
+                                type="number"
+                                value={productForm.width}
+                                onChange={(e) => setProductForm(prev => ({ ...prev, width: e.target.value }))}
+                                placeholder="15"
+                                className={darkMode ? 'bg-slate-600 border-slate-500 h-9' : 'h-9'}
+                              />
+                            </div>
+                            <div>
+                              <Label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Height (cm)</Label>
+                              <Input
+                                type="number"
+                                value={productForm.height}
+                                onChange={(e) => setProductForm(prev => ({ ...prev, height: e.target.value }))}
+                                placeholder="10"
+                                className={darkMode ? 'bg-slate-600 border-slate-500 h-9' : 'h-9'}
+                              />
+                            </div>
                           </div>
                         </div>
                         
