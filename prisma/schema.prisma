@@ -169,6 +169,7 @@ model Product {
   comparisons       Comparison[]
   flashSale         FlashSale?
   priceHistory      PriceHistory[]
+  shippingInfo      ProductShipping?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 }
@@ -685,4 +686,95 @@ model VendorPayout {
   processedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// ==================== SHIPPING ZONES & RATES ====================
+
+// Zone definitions (e.g., "Kenya - Nairobi", "Uganda - Kampala")
+model ShippingZone {
+  id          String         @id @default(cuid())
+  name        String         // e.g., "Kampala", "Nairobi", "Dar es Salaam"
+  country     String         // e.g., "Uganda", "Kenya", "Tanzania", "Rwanda"
+  countryCode String         // e.g., "UG", "KE", "TZ", "RW"
+  region      String?        // e.g., "Central", "Eastern"
+  cities      String?        // JSON array of covered cities
+  isActive    Boolean        @default(true)
+  
+  // Relations
+  originRates     ShippingRate[] @relation("OriginRates")
+  destRates       ShippingRate[] @relation("DestRates")
+  productShippings ProductShipping[]
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  @@unique([country, name])
+}
+
+// Shipping rates between zones with size categories
+model ShippingRate {
+  id              String   @id @default(cuid())
+  
+  // Origin (seller location)
+  originZoneId    String
+  originZone      ShippingZone @relation("OriginRates", fields: [originZoneId], references: [id])
+  
+  // Destination (buyer location)
+  destZoneId      String
+  destZone        ShippingZone @relation("DestRates", fields: [destZoneId], references: [id])
+  
+  // Zone type: Z1=Local(same city), Z2=National, Z3=Regional(neighboring), Z4=Cross-border
+  zoneType        String   @default("Z2")
+  
+  // Base rates by size category (in USD, converted to local currency at display)
+  baseRateSmall   Float    @default(3.00)   // Small items (jewelry, accessories)
+  baseRateMedium  Float    @default(6.00)   // Medium items (shoes, small bags)
+  baseRateLarge   Float    @default(12.00)  // Large items (clothing bundles)
+  baseRateXLarge  Float    @default(25.00)  // XL items (furniture, heavy items)
+  
+  // Size surcharges
+  surchargeMedium Float    @default(0)      // Extra for medium
+  surchargeLarge  Float    @default(3.00)   // Extra for large
+  surchargeXLarge Float    @default(8.00)   // Extra for XL
+  
+  // Delivery estimates
+  minDays         Int      @default(1)
+  maxDays         Int      @default(7)
+  
+  // Platform markup (hidden from users, added to actual shipping cost)
+  platformMarkup  Float    @default(0.25)   // 25% markup for platform profit
+  
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([originZoneId, destZoneId])
+}
+
+// Product shipping info
+model ProductShipping {
+  id              String   @id @default(cuid())
+  productId       String   @unique
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  // Seller's location zone
+  sellerZoneId    String?
+  sellerZone      ShippingZone? @relation(fields: [sellerZoneId], references: [id])
+  
+  // Size category for shipping
+  sizeCategory    String   @default("medium")  // small, medium, large, xlarge
+  
+  // Weight in kg (optional, for more accurate pricing)
+  weight          Float?
+  
+  // Package dimensions (optional)
+  length          Float?
+  width           Float?
+  height          Float?
+  
+  // Seller can offer free shipping
+  freeShipping    Boolean  @default(false)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
