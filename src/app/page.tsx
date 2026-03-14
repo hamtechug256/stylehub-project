@@ -145,6 +145,8 @@ export default function Marketplace() {
     baseRateSmall: 3, baseRateMedium: 6, baseRateLarge: 12, baseRateXLarge: 25,
     minDays: 1, maxDays: 7, platformMarkup: 0.25
   })
+  const [selectedDestZone, setSelectedDestZone] = useState<string>('')
+  const [calculatedShipping, setCalculatedShipping] = useState<any>(null)
 
   // Stores
   const { user, isAuthenticated, login, logout, updateUser } = useAuthStore()
@@ -378,6 +380,45 @@ export default function Marketplace() {
     } catch (error) {
       toast.error('Failed to delete zone')
     }
+  }
+
+  // Calculate shipping for checkout
+  const calculateShipping = async (destZoneId: string) => {
+    if (!destZoneId || items.length === 0) {
+      setCalculatedShipping(null)
+      return
+    }
+
+    // Calculate total shipping for all items based on their size categories
+    let totalShipping = 0
+    let totalDays = { min: 0, max: 0 }
+    
+    for (const item of items) {
+      const sizeCategory = (item.product as any).sizeCategory || 'medium'
+      try {
+        const res = await fetch(`/api/shipping?action=calculate&originZoneId=${(item.product as any).sellerZoneId || 'default'}&destZoneId=${destZoneId}&sizeCategory=${sizeCategory}`)
+        const data = await res.json()
+        if (data.buyerPays) {
+          totalShipping += data.buyerPays * item.quantity
+          totalDays.min = Math.max(totalDays.min, data.minDays || 1)
+          totalDays.max = Math.max(totalDays.max, data.maxDays || 7)
+        }
+      } catch (error) {
+        // Use default rate if API fails
+        const defaultRates: Record<string, number> = {
+          'small': 5, 'medium': 8, 'large': 15, 'xlarge': 30
+        }
+        totalShipping += (defaultRates[sizeCategory] || 8) * item.quantity
+        totalDays = { min: 3, max: 7 }
+      }
+    }
+
+    setCalculatedShipping({
+      total: totalShipping,
+      minDays: totalDays.min,
+      maxDays: totalDays.max,
+      destZoneId
+    })
   }
 
   // Effects
@@ -3672,6 +3713,52 @@ export default function Marketplace() {
                 </div>
               )}
               
+              {/* Shipping Zone Selection */}
+              <div className={`p-4 rounded-xl ${darkMode ? 'bg-slate-700' : 'bg-blue-50'} border ${darkMode ? 'border-slate-600' : 'border-blue-200'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Truck className={`w-5 h-5 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                  <Label className={`font-semibold ${darkMode ? 'text-white' : 'text-blue-900'}`}>Delivery Location</Label>
+                </div>
+                <Select value={selectedDestZone} onValueChange={(value) => {
+                  setSelectedDestZone(value)
+                  calculateShipping(value)
+                }}>
+                  <SelectTrigger className={darkMode ? 'bg-slate-600 border-slate-500' : 'bg-white'}>
+                    <SelectValue placeholder="Select your city/region" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {shippingZones.map((zone) => (
+                      <SelectItem key={zone.id} value={zone.id}>
+                        {zone.name}, {zone.country}
+                      </SelectItem>
+                    ))}
+                    {shippingZones.length === 0 && (
+                      <>
+                        <SelectItem value="kampala">Kampala, Uganda</SelectItem>
+                        <SelectItem value="nairobi">Nairobi, Kenya</SelectItem>
+                        <SelectItem value="dar-es-salaam">Dar es Salaam, Tanzania</SelectItem>
+                        <SelectItem value="kigali">Kigali, Rwanda</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+                
+                {calculatedShipping && (
+                  <div className={`mt-3 p-3 rounded-lg ${darkMode ? 'bg-slate-600' : 'bg-white'}`}>
+                    <div className="flex justify-between items-center">
+                      <span className={darkMode ? 'text-slate-300' : 'text-slate-600'}>Shipping Cost</span>
+                      <span className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                        ${calculatedShipping.total.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1 text-xs text-slate-500">
+                      <Clock3 className="w-3 h-3" />
+                      <span>Est. {calculatedShipping.minDays}-{calculatedShipping.maxDays} business days</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
               <div className={`border-t pt-4 space-y-4 ${darkMode ? 'border-slate-700' : ''}`}>
                 <div className="flex justify-between">
                   <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>Subtotal</span>
@@ -3683,9 +3770,17 @@ export default function Marketplace() {
                     <span>-${getDiscount().toFixed(2)}</span>
                   </div>
                 )}
+                {calculatedShipping && (
+                  <div className="flex justify-between">
+                    <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>Shipping</span>
+                    <span className={darkMode ? 'text-white' : ''}>${calculatedShipping.total.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-lg font-bold">
                   <span className={darkMode ? 'text-white' : ''}>Total</span>
-                  <span className="text-purple-600">${getTotal().toFixed(2)}</span>
+                  <span className="text-purple-600">
+                    ${(getSubtotal() - getDiscount() + (calculatedShipping?.total || 0)).toFixed(2)}
+                  </span>
                 </div>
                 
                 <div className="space-y-3">
